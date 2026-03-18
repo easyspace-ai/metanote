@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Token 计费系统测试</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { color: #333; margin-bottom: 20px; text-align: center; }
+        h2 { color: #555; margin: 20px 0 10px; padding-bottom: 5px; border-bottom: 2px solid #4CAF50; }
+        
+        .card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: 500; color: #555; }
+        input, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        input:focus, select:focus { outline: none; border-color: #4CAF50; }
+        
+        button { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
+        .btn-primary { background: #4CAF50; color: white; }
+        .btn-primary:hover { background: #45a049; }
+        .btn-secondary { background: #2196F3; color: white; }
+        .btn-secondary:hover { background: #1976D2; }
+        .btn-warning { background: #ff9800; color: white; }
+        .btn-warning:hover { background: #f57c00; }
+        .btn-group { display: flex; gap: 10px; flex-wrap: wrap; }
+        
+        .balance-display { display: flex; gap: 30px; align-items: center; }
+        .balance-item { text-align: center; }
+        .balance-value { font-size: 32px; font-weight: bold; color: #4CAF50; }
+        .balance-label { color: #888; font-size: 12px; }
+        
+        .pricing-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        .pricing-table th, .pricing-table td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
+        .pricing-table th { background: #f9f9f9; font-weight: 600; }
+        .pricing-table tr:hover { background: #f5f5f5; }
+        .price-tag { color: #4CAF50; font-weight: 500; }
+        
+        .result-box { background: #f9f9f9; border: 1px solid #eee; border-radius: 4px; padding: 15px; margin-top: 15px; font-family: monospace; font-size: 13px; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+        
+        .transaction-list { list-style: none; }
+        .transaction-item { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #eee; }
+        .transaction-item:hover { background: #f9f9f9; }
+        .transaction-amount { font-weight: 600; }
+        .transaction-amount.negative { color: #f44336; }
+        .transaction-amount.positive { color: #4CAF50; }
+        
+        .estimate-result { background: #e8f5e9; border: 1px solid #c8e6c9; border-radius: 4px; padding: 15px; margin-top: 15px; }
+        .estimate-result h3 { color: #2e7d32; margin-bottom: 10px; }
+        
+        .status { padding: 5px 10px; border-radius: 4px; font-size: 12px; }
+        .status-success { background: #e8f5e9; color: #2e7d32; }
+        .status-error { background: #ffebee; color: #c62828; }
+        
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🪙 Token 计费系统测试</h1>
+        
+        <!-- 登录区域 -->
+        <div class="card">
+            <h2>🔐 用户认证</h2>
+            <div class="form-group">
+                <label>API 地址</label>
+                <input type="text" id="baseUrl" value="http://localhost:40001" />
+            </div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>用户名</label>
+                    <input type="text" id="username" value="root" />
+                </div>
+                <div class="form-group">
+                    <label>密码</label>
+                    <input type="password" id="password" value="1234" />
+                </div>
+            </div>
+            <div class="btn-group">
+                <button class="btn-primary" onclick="login()">登录</button>
+                <button class="btn-secondary" onclick="register()">注册新用户</button>
+            </div>
+            <div id="authResult" class="result-box" style="display:none;"></div>
+        </div>
+        
+        <!-- 余额区域 -->
+        <div class="card">
+            <div class="card-header">
+                <h2>💰 我的余额</h2>
+                <button class="btn-primary" onclick="getBalance()">刷新余额</button>
+            </div>
+            <div id="balanceDisplay" class="balance-display">
+                <div class="balance-item">
+                    <div class="balance-value" id="balanceValue">--</div>
+                    <div class="balance-label">积分余额</div>
+                </div>
+                <div class="balance-item">
+                    <div class="balance-value" id="usedValue">--</div>
+                    <div class="balance-label">已用积分</div>
+                </div>
+                <div class="balance-item">
+                    <div class="balance-value" id="cnyValue">--</div>
+                    <div class="balance-label">约合人民币</div>
+                </div>
+            </div>
+            <div style="margin-top: 15px;">
+                <div class="form-group" style="display: flex; gap: 10px;">
+                    <input type="number" id="rechargeAmount" placeholder="充值金额（积分）" value="1000" style="flex: 1;" />
+                    <button class="btn-warning" onclick="recharge()">充值</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 模型定价 -->
+        <div class="card">
+            <div class="card-header">
+                <h2>📊 模型定价表</h2>
+                <button class="btn-secondary" onclick="getPricing()">刷新定价</button>
+            </div>
+            <table class="pricing-table">
+                <thead>
+                    <tr>
+                        <th>模型</th>
+                        <th>提供商</th>
+                        <th>输入价格 ($/M tokens)</th>
+                        <th>输出价格 ($/M tokens)</th>
+                        <th>上下文长度</th>
+                    </tr>
+                </thead>
+                <tbody id="pricingTable"></tbody>
+            </table>
+        </div>
+        
+        <!-- 预估消耗 -->
+        <div class="card">
+            <h2>🔢 消耗预估</h2>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>输入 Tokens</label>
+                    <input type="number" id="promptTokens" value="1000" />
+                </div>
+                <div class="form-group">
+                    <label>输出 Tokens</label>
+                    <input type="number" id="completionTokens" value="500" />
+                </div>
+            </div>
+            <div class="form-group">
+                <label>选择模型</label>
+                <select id="modelSelect"></select>
+            </div>
+            <button class="btn-primary" onclick="estimateCost()">预估消耗</button>
+            <div id="estimateResult"></div>
+        </div>
+        
+        <!-- 消费记录 -->
+        <div class="card">
+            <div class="card-header">
+                <h2>📋 消费记录</h2>
+                <button class="btn-secondary" onclick="getUsage()">刷新记录</button>
+            </div>
+            <div id="usageStats" style="margin-bottom: 15px;"></div>
+            <ul class="transaction-list" id="transactionList"></ul>
+        </div>
+        
+        <!-- 聊天测试 -->
+        <div class="card">
+            <h2>💬 聊天测试（带计费）</h2>
+            <div class="form-group">
+                <label>发送消息</label>
+                <input type="text" id="chatMessage" value="你好，请介绍一下你自己" />
+            </div>
+            <div class="btn-group">
+                <button class="btn-primary" onclick="sendChat()">发送</button>
+                <button class="btn-secondary" onclick="sendStreamChat()">流式发送</button>
+            </div>
+            <div id="chatResult" class="result-box" style="display:none;"></div>
+        </div>
+    </div>
+
+    <script>
+        let token = localStorage.getItem('token') || '';
+        let baseUrl = 'http://localhost:40001';
+        
+        // 更新 baseUrl
+        document.getElementById('baseUrl').addEventListener('change', (e) => {
+            baseUrl = e.target.value;
+        });
+        
+        // API 请求封装
+        async function api(method, path, options = {}) {
+            const url = `${baseUrl}${path}`;
+            const headers = {
+                'Content-Type': 'application/json',
+                ...options.headers
+            };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+            
+            const response = await fetch(url, {
+                method,
+                headers,
+                ...options
+            });
+            
+            const data = await response.json().catch(() => ({}));
+            return { status: response.status, data };
+        }
+        
+        // 登录
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            baseUrl = document.getElementById('baseUrl').value;
+            
+            const formData = new URLSearchParams();
+            formData.append('username', username);
+            formData.append('password', password);
+            
+            const result = await api('POST', '/api/auth/login', {
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: formData
+            });
+            
+            const resultDiv = document.getElementById('authResult');
+            resultDiv.style.display = 'block';
+            
+            if (result.status === 200) {
+                token = result.data.access_token;
+                localStorage.setItem('token', token);
+                resultDiv.innerHTML = `<span class="status status-success">✅ 登录成功</span>\nToken: ${token.substring(0, 30)}...`;
+                // 自动加载其他数据
+                getBalance();
+                getPricing();
+            } else {
+                resultDiv.innerHTML = `<span class="status status-error">❌ 登录失败</span>\n${JSON.stringify(result.data, null, 2)}`;
+            }
+        }
+        
+        // 注册
+        async function register() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            const result = await api('POST', '/api/auth/register', {
+                body: JSON.stringify({
+                    username,
+                    email: `${username}@test.com`,
+                    password
+                })
+            });
+            
+            const resultDiv = document.getElementById('authResult');
+            resultDiv.style.display = 'block';
+            
+            if (result.status === 200) {
+                resultDiv.innerHTML = `<span class="status status-success">✅ 注册成功</span>\n${JSON.stringify(result.data, null, 2)}`;
+            } else {
+                resultDiv.innerHTML = `<span class="status status-status-error">❌ 注册失败</span>\n${JSON.stringify(result.data, null, 2)}`;
+            }
+        }
+        
+        // 获取余额
+        async function getBalance() {
+            const result = await api('GET', '/api/user/balance');
+            
+            if (result.status === 200) {
+                document.getElementById('balanceValue').textContent = result.data.balance;
+                document.getElementById('usedValue').textContent = result.data.used;
+                document.getElementById('cnyValue').textContent = '¥' + result.data.estimated_cny;
+            } else {
+                alert('获取余额失败: ' + JSON.stringify(result.data));
+            }
+        }
+        
+        // 充值
+        async function recharge() {
+            const amount = document.getElementById('rechargeAmount').value;
+            const result = await api('POST', `/api/user/recharge?amount=${amount}&reason=manual_recharge`);
+            
+            if (result.status === 200) {
+                alert(`充值成功！当前余额: ${result.data.balance_after}`);
+                getBalance();
+            } else {
+                alert('充值失败: ' + JSON.stringify(result.data));
+            }
+        }
+        
+        // 获取定价
+        async function getPricing() {
+            const result = await api('GET', '/api/user/pricing');
+            
+            if (result.status === 200) {
+                const table = document.getElementById('pricingTable');
+                table.innerHTML = result.data.map(m => `
+                    <tr>
+                        <td>${m.model_name}</td>
+                        <td>${m.provider}</td>
+                        <td class="price-tag">$${m.prompt_price_per_million.toFixed(2)}</td>
+                        <td class="price-tag">$${m.completion_price_per_million.toFixed(2)}</td>
+                        <td>${(m.context_length / 1000).toFixed(0)}K</td>
+                    </tr>
+                `).join('');
+                
+                // 更新模型选择
+                const select = document.getElementById('modelSelect');
+                select.innerHTML = result.data.map(m => 
+                    `<option value="${m.model_id}">${m.model_name}</option>`
+                ).join('');
+            }
+        }
+        
+        // 预估消耗
+        async function estimateCost() {
+            const promptTokens = document.getElementById('promptTokens').value;
+            const completionTokens = document.getElementById('completionTokens').value;
+            const modelId = document.getElementById('modelSelect').value;
+            
+            const result = await api('GET', `/api/user/estimate?prompt_tokens=${promptTokens}&completion_tokens=${completionTokens}&model_id=${modelId}`);
+            
+            const resultDiv = document.getElementById('estimateResult');
+            
+            if (result.status === 200) {
+                resultDiv.innerHTML = `
+                    <div class="estimate-result">
+                        <h3>预估消耗</h3>
+                        <p><strong>模型:</strong> ${result.data.model_name}</p>
+                        <p><strong>输入:</strong> ${result.data.prompt_tokens} tokens</p>
+                        <p><strong>输出:</strong> ${result.data.completion_tokens} tokens</p>
+                        <p><strong>预估积分:</strong> <span style="color: #4CAF50; font-size: 20px;">${result.data.estimated_credits}</span> 积分</p>
+                        <p><strong>约合人民币:</strong> ¥${result.data.estimated_cny}</p>
+                    </div>
+                `;
+            } else {
+                resultDiv.innerHTML = `<span class="status status-error">预估失败</span>`;
+            }
+        }
+        
+        // 获取消费记录
+        async function getUsage() {
+            const result = await api('GET', '/api/user/usage?limit=20');
+            
+            if (result.status === 200) {
+                // 统计信息
+                document.getElementById('usageStats').innerHTML = `
+                    <div class="balance-display">
+                        <div class="balance-item">
+                            <div class="balance-value">${result.data.total_credits_used}</div>
+                            <div class="balance-label">总消耗积分</div>
+                        </div>
+                        <div class="balance-item">
+                            <div class="balance-value">${result.data.total_prompt_tokens}</div>
+                            <div class="balance-label">总输入 Tokens</div>
+                        </div>
+                        <div class="balance-item">
+                            <div class="balance-value">${result.data.total_completion_tokens}</div>
+                            <div class="balance-label">总输出 Tokens</div>
+                        </div>
+                    </div>
+                `;
+                
+                // 交易列表
+                const list = document.getElementById('transactionList');
+                list.innerHTML = result.data.transactions.map(t => `
+                    <li class="transaction-item">
+                        <div>
+                            <strong>${t.reason}</strong>
+                            <div style="color: #888; font-size: 12px;">
+                                ${t.model_id || 'N/A'} | 
+                                ${t.prompt_tokens || 0} / ${t.completion_tokens || 0} tokens
+                            </div>
+                            <div style="color: #aaa; font-size: 11px;">${t.created_at}</div>
+                        </div>
+                        <div class="transaction-amount ${t.amount < 0 ? 'negative' : 'positive'}">
+                            ${t.amount > 0 ? '+' : ''}${t.amount}
+                        </div>
+                    </li>
+                `).join('') || '<li style="padding: 20px; text-align: center; color: #888;">暂无记录</li>';
+            }
+        }
+        
+        // 发送聊天
+        async function sendChat() {
+            const message = document.getElementById('chatMessage').value;
+            const resultDiv = document.getElementById('chatResult');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '发送中...';
+            
+            const result = await api('POST', '/api/chat', {
+                body: JSON.stringify({ message, mode: 'chat' })
+            });
+            
+            if (result.status === 200) {
+                resultDiv.innerHTML = `
+<span class="status status-success">✅ 聊天成功</span>
+
+回复: ${result.data.content}
+
+Project ID: ${result.data.project_id}
+`;
+                // 刷新余额
+                getBalance();
+            } else {
+                resultDiv.innerHTML = `<span class="status status-error">❌ 聊天失败</span>\n${JSON.stringify(result.data, null, 2)}`;
+            }
+        }
+        
+        // 流式聊天
+        async function sendStreamChat() {
+            const message = document.getElementById('chatMessage').value;
+            const resultDiv = document.getElementById('chatResult');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '流式接收中...\n\n';
+            
+            try {
+                const response = await fetch(`${baseUrl}/api/chat/stream`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ message, mode: 'chat' })
+                });
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    resultDiv.textContent += decoder.decode(value);
+                }
+                
+                resultDiv.innerHTML = '<span class="status status-success">✅ 完成</span>\n\n' + resultDiv.textContent;
+                getBalance();
+            } catch (e) {
+                resultDiv.innerHTML = `<span class="status status-error">❌ 错误</span>\n${e.message}`;
+            }
+        }
+        
+        // 页面加载时恢复 token
+        if (token) {
+            document.getElementById('authResult').style.display = 'block';
+            document.getElementById('authResult').innerHTML = '<span class="status status-success">已恢复登录状态</span>';
+        }
+    </script>
+</body>
+</html>
